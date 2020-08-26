@@ -103,8 +103,6 @@ alpha_known_values = st.sidebar.slider('Alpha - Known Data:', 0.0,1.0,.5)
 
 seconds_threshold = float(st.text_input("Half-Life Threshold (Seconds): ", '3600'))
 
-
-
 norm_X, X_test = generate_test_df(seconds_threshold, min_proton, max_proton, 
                                   min_neutron, max_neutron)
 new_model = hs.quick_model_generator(df, model, 'Seconds', 
