@@ -31,13 +31,13 @@ def load_data():
     return web_data_df, github_data_df
 
 def clean_data(web_data_df, github_data_df):
-    cols_to_keep = ['Z','N','Mass','Half Life','M']
+    cols_to_keep = ['Z','N','Mass','Half Life']
     data_merger = DataMerger(cols_to_keep)
     df = data_merger.transform(web_data_df, github_data_df)[1:].reset_index(drop=True)
     return df
 
 def get_prepared_data(df):
-    X = df.drop(['Half Life','M'], axis=1)
+    X = df.drop(['Half Life'], axis=1)
     y = df['Half Life']
     
     X_features = ['Z','N','Mass','N/P','Adj. N/P','P/N','Adj. P/N','N/Mass','P/Mass','Adj. N/Mass',
@@ -95,12 +95,13 @@ def get_xgb_model(df):
     return xgb_model
 
 def quick_transformer_generator(df,  target, m_threshold=2, s_threshold=10):
-    X = df.drop(['Half Life','M'], axis=1)
+    X = df.drop(['Half Life'], axis=1)
     y = df['Half Life']
     
     data_transformer = Data_Transformer(X_features='all',
                                         target_vector='Seconds', prediction_type='Binary',
-                                        magnitude_threshold=2, seconds_threshold=3600,
+                                        magnitude_threshold=m_threshold,
+                                        seconds_threshold=s_threshold,
                                         X_imputer_strat='drop', X_fill_value='None',
                                         y_imputer_strat='drop', y_fill_value='None')
 
@@ -111,10 +112,11 @@ def quick_transformer_generator(df,  target, m_threshold=2, s_threshold=10):
 
 
 def quick_model_generator(df, model, target, m_threshold=2, s_threshold=10):
-    X = df.drop(['Half Life','M'], axis=1)
+    X = df.drop(['Half Life'], axis=1)
     y = df['Half Life']
     
-    data_transformer = quick_transformer_generator(df,  target, m_threshold=2, s_threshold=10)
+    data_transformer = quick_transformer_generator(df,  target, m_threshold=m_threshold, 
+                                                   s_threshold=s_threshold)
 
     prepared_X, prepared_y = data_transformer.transform(X, y)
     X_norm = normalize_data(prepared_X)
@@ -125,4 +127,8 @@ def quick_model_generator(df, model, target, m_threshold=2, s_threshold=10):
     model.fit(X_train, y_train)
     
     return model
+
+
+
+
 
