@@ -25,9 +25,9 @@ def load_data():
     keV_index = web_data_df['mass'][web_data_df['mass'].str.contains('keV') == True].index
     web_data_df = web_data_df.drop(keV_index)
     web_data_df.reset_index(drop=True)
-    
+
     github_data_df = pd.read_csv("Data/Loaded_Data/Github_Data.csv")
-    
+
     return web_data_df, github_data_df
 
 def clean_data(web_data_df, github_data_df):
@@ -36,99 +36,71 @@ def clean_data(web_data_df, github_data_df):
     df = data_merger.transform(web_data_df, github_data_df)[1:].reset_index(drop=True)
     return df
 
-def get_prepared_data(df):
+
+
+def get_prepared_data(df, transformer):
     X = df.drop(['Half Life'], axis=1)
     y = df['Half Life']
-    
-    X_features = ['Z','N','Mass','N/P','Adj. N/P','P/N','Adj. P/N','N/Mass','P/Mass','Adj. N/Mass',
-              'Adj. P/Mass', 'Adj. N/Mass - Z', 'Adj. P/Mass - Z', 'Z-N']
 
-    data_transformer = Data_Transformer(X_features='all',
-                                        target_vector='Seconds', prediction_type='Binary',
-                                        magnitude_threshold=2, seconds_threshold=3600,
-                                        X_imputer_strat='drop', X_fill_value='None',
-                                        y_imputer_strat='drop', y_fill_value='None')
+    prepared_X, prepared_y = transformer.transform(X, y)
 
-    prepared_X, prepared_y = data_transformer.transform(X, y)
-    
     return prepared_X, prepared_y
 
 def normalize_data(df):
     norm = MinMaxScaler().fit(df)
     df_norm = pd.DataFrame(norm.transform(df), columns=df.columns)
     return df_norm
-    
-def get_split_data(X_norm, prepared_y):
-    return train_test_split(X_norm,prepared_y,test_size=0.2,random_state=42)  
-    
 
-def get_xgb_model(df):
-    
-    prepared_X, prepared_y = get_prepared_data(df)
-    X_norm = normalize_data(prepared_X)
-    X_train, X_test, y_train, y_test = get_split_data(X_norm, prepared_y)
-     
-    
+def get_final_data(df, transformer):
+    prepared_X, prepared_y = get_prepared_data(df, transformer)
+    normalized_X = normalize_data(prepared_X)
+
+    return normalized_X, prepared_y
+
+
+
+def get_default_xgb_model(df):
+
+    final_X, final_y = get_final_data(df, get_data_transformer())
+
+    parameters = {'nthread':1,
+                  'objective':'binary:logistic',
+                  'learning_rate': 0.01,
+                  'max_depth': 8,
+                  'min_child_weight': 3,
+                  'silent': 1,
+                  'subsample': 0.8,
+                  'colsample_bytree': 0.5,
+                  'n_estimators': 1000,
+                  'missing':-999,
+                  'seed': 1337}
+
+
     xgb_model = XGBClassifier(verbosity=0)
-    
-    parameters = {'nthread':[1],
-                  'objective':['binary:logistic'],
-                  'learning_rate': [0.01],
-                  'max_depth': [8],
-                  'min_child_weight': [3],
-                  'silent': [1],
-                  'subsample': [0.8],
-                  'colsample_bytree': [0.5],
-                  'n_estimators': [1000],
-                  'missing':[-999],
-                  'seed': [1337]}
-    
-    xgb_model = GridSearchCV(estimator=xgb_model, param_grid=parameters, n_jobs=1, 
-                       cv=StratifiedKFold(n_splits=5, shuffle=True), 
-                       scoring='f1',
-                       refit=True)
-    
+    xgb_model.set_params(**parameters)
+    xgb_model.fit(final_X, final_y)
 
-    xgb_model.fit(X_train, y_train)
-    
-    
     return xgb_model
 
-def quick_transformer_generator(df,  target, m_threshold=2, s_threshold=10):
-    X = df.drop(['Half Life'], axis=1)
-    y = df['Half Life']
-    
+def get_data_transformer(target_vector='Seconds', m_threshold=2, s_threshold=60):
     data_transformer = Data_Transformer(X_features='all',
-                                        target_vector='Seconds', prediction_type='Binary',
+                                        target_vector=target_vector, prediction_type='Binary',
                                         magnitude_threshold=m_threshold,
                                         seconds_threshold=s_threshold,
                                         X_imputer_strat='drop', X_fill_value='None',
                                         y_imputer_strat='drop', y_fill_value='None')
 
-    
-
-    
     return data_transformer
 
 
-def quick_model_generator(df, model, target, m_threshold=2, s_threshold=10):
-    X = df.drop(['Half Life'], axis=1)
-    y = df['Half Life']
-    
-    data_transformer = quick_transformer_generator(df,  target, m_threshold=m_threshold, 
-                                                   s_threshold=s_threshold)
-
-    prepared_X, prepared_y = data_transformer.transform(X, y)
-    X_norm = normalize_data(prepared_X)
-    
-    X_train, X_test, y_train, y_test = get_split_data(X_norm, prepared_y)
-    
-    
-    model.fit(X_train, y_train)
-    
+def train_model(final_X, final_y, model):
+    model.fit(final_X, final_y)
     return model
 
+def get_custom_model(data, default_model, target_vector='Seconds', s_threshold=60, m_threshold=2):
+    transformer = get_data_transformer(target_vector=target_vector, s_threshold=s_threshold)
+    x, y = get_final_data(data, transformer)
 
+    custom_model = train_model(x, y, default_model)
 
-
-
+    return custom_model
