@@ -17,10 +17,10 @@ from decimal import Decimal
 import Visualisations_Helper_Script as hs
 import Predefined_Models as pm
 
-df = hs.clean_data(hs.load_data()[0], hs.load_data()[1])
-model = pm.one_hour_model
+df = pm.get_data()
+model = pm.get_default_model()
 
-def generate_test_data(seconds_threshold, min_proton, max_proton, min_neutron, max_neutron):
+def generate_test_data(seconds_threshold, min_proton, max_proton, min_neutron, max_neutron, X_features='all'):
     z, n = [],[]
     for i in range(min_proton,max_proton+1):
         for j in range(min_neutron,max_neutron+1):
@@ -33,7 +33,7 @@ def generate_test_data(seconds_threshold, min_proton, max_proton, min_neutron, m
     #fix mass
 
     data_transformer = hs.get_data_transformer(target_vector = 'Seconds',
-                                               s_threshold=seconds_threshold)
+                                               s_threshold=seconds_threshold, X_features=X_features)
 
     X_test = data_transformer.transform(test_df)
     final_X = hs.normalize_data(X_test)
@@ -49,8 +49,8 @@ def plot_model(df, X_test, predictions, seconds_threshold,
     if show_known_values:
         data_transformer = hs.get_data_transformer(target_vector='Seconds',
                                                     s_threshold=seconds_threshold)
-        X = df.drop(['Half Life'], axis=1)
-        y = df['Half Life']
+        X = df.drop(['Half Life (Seconds)'], axis=1)
+        y = df['Half Life (Seconds)']
         X,y = data_transformer.transform(X,y)
         X = X[(X['Z']>=min_proton) & (X['Z']<=max_proton)]
         X = X[(X['N']>=min_neutron) & (X['N']<=max_neutron)]
@@ -72,7 +72,7 @@ def plot_model(df, X_test, predictions, seconds_threshold,
     plt.ylim(min_proton-2, max_proton+5)
 
     plt.xlabel('N')
-    plt.ylabel('Z')
+    plt.ylabel('P')
 
     plt.legend()
     plt.show()
@@ -87,25 +87,31 @@ max_proton = int(st.sidebar.text_input("Max Protons: ", '118'))
 min_neutron = int(st.sidebar.text_input("Min Neutrons: ", '1'))
 max_neutron = int(st.sidebar.text_input("Max Neutrons: ", '117'))
 
+
+#features_to_keep = st.sidebar.multiselect("Features to Use:", pm.all_features, default=['Z','N','Mass'])
+show_raw_data = st.sidebar.checkbox("Show Raw Data", True)
+
 seconds_threshold = float(st.text_input("Half-Life Threshold (Seconds): ", '3600'))
 
 st.sidebar.markdown('**Graph Options:**')
 alpha_predictions = st.sidebar.slider('Alpha - Predictions:', 0.0,1.0,.37)
 
-show_known_values = st.sidebar.checkbox("Show Known Data",True)
+show_known_values = st.sidebar.checkbox("Show Known Data", True)
 alpha_known_values = st.sidebar.slider('Alpha - Known Data:', 0.0,1.0,.5)
 
 #Predictions
 final_X, X_test = generate_test_data(seconds_threshold, min_proton, max_proton,
-                                     min_neutron, max_neutron)
+                                     min_neutron, max_neutron, X_features='all')
 
 model = hs.get_custom_model(df, model, 'Seconds',
-                                s_threshold=seconds_threshold)
+                            s_threshold=seconds_threshold, X_features='all')
 
 predictions_test = model.predict(final_X)
-
-print(X_test, predictions_test)
 
 plot_model(df, X_test, predictions_test, seconds_threshold, min_proton,
            max_proton, min_neutron, max_neutron, alpha_predictions,
            show_known_values, alpha_known_values)
+
+if show_raw_data:
+    st.write("Raw Data: ")
+    st.write(X_test)
